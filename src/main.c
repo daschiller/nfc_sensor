@@ -16,11 +16,12 @@
 // #define LED PB1
 
 #define TAG PB1
-#define ARRAY_SIZE 128                        // 256 bytes
-#define TAG_SIZE 256                          // 512 bytes
+#define ARRAY_SIZE 1                          // 256 bytes
+#define TAG_SIZE 512                          // 512 bytes
 #define PACKET_NO TAG_SIZE / (ARRAY_SIZE * 2) // number of packets on tag
 #define DELAY 100                             // milliseconds
 #define ST25DV_DATA 0xA6
+#define SKIP_INTERVAL 5
 
 // globals
 uint16_t adc_offset;
@@ -68,15 +69,19 @@ void init_adc(void) {
     _delay_ms(1);
     // disable digital input buffers on ADC2 and ADC3
     DIDR0 = _BV(ADC2D) | _BV(ADC3D);
+    // divide ADC clock by 16
+    ADCSRA = _BV(ADPS2);
     // enable ADC
-    ADCSRA = _BV(ADEN);
+    ADCSRA |= _BV(ADEN);
 
     // offset measurement (ADC2 for both inputs, 20x gain)
-    ADMUX |= _BV(MUX2) | _BV(MUX0);
+    // ADMUX |= _BV(MUX2) | _BV(MUX0);
+    ADMUX |= _BV(MUX2);
     adc_offset = read_adc();
 
     // set ADC2 as positive input, ADC3 as negative input and gain to 20x
-    ADMUX |= _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
+    // ADMUX |= _BV(MUX2) | _BV(MUX1) | _BV(MUX0);
+    ADMUX |= _BV(MUX2) | _BV(MUX1);
 }
 
 void write_nfc(uint16_t address, uint16_t *buffer, int size) {
@@ -123,7 +128,9 @@ void init_timer(void) {
 
 void init_wdt(void) {
     // enable watchdog interrupts for (roughly) every one second
-    WDTCR = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+    // WDTCR = _BV(WDIE) | _BV(WDP2) | _BV(WDP1);
+
+    WDTCR = _BV(WDIE) | _BV(WDP3) | _BV(WDP0);
     sei();
 }
 
@@ -141,6 +148,8 @@ EMPTY_INTERRUPT(WDT_vect)
 // do not push locally used registers
 // we don't use the stack at all (except for return addresses)
 __attribute__((OS_main)) int main(void) {
+    uint8_t skip_interval = SKIP_INTERVAL;
+
     // divide clock by 64 (125 kHz)
     clock_prescale_set(clock_div_64);
     // turn off analog comparator
@@ -179,6 +188,10 @@ __attribute__((OS_main)) int main(void) {
 #ifdef STATUS_LED
             toggle_led();
 #endif
+            while (skip_interval--) {
+                sleep();
+            }
+            skip_interval = SKIP_INTERVAL;
             adc_values[j] = read_adc();
         }
         // ensure that no interrupts are fired when we write to the tag
@@ -193,7 +206,9 @@ __attribute__((OS_main)) int main(void) {
     error_led();
 #endif
     // disable ADC
-    ADCSRA &= ~_BV(ADEN);
+    // ADCSRA &= ~_BV(ADEN);
     while (1) {
+        ADCSRA |= _BV(ADSC);
+        loop_until_bit_is_clear(ADCSRA, ADSC);
     };
 }
