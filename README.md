@@ -6,7 +6,7 @@ density"](https://doi.org/10.1002/adma.202204457).
 
 # Hardware
 
-The board has been designed in KiCad. You can use it generate your own Gerbers.
+The board has been designed in KiCad. You can use it to generate your own Gerbers.
 
 Here's a shortened BOM:
 
